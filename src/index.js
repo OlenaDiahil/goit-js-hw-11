@@ -1,68 +1,70 @@
-import { fetchBreeds, fetchCatByBreed } from './cat-api.js';
+import { pixabayAPI } from './pixabay-api.js';
+import Notiflix from 'notiflix';
+import { createPhotoCards, clearGallery } from './gallery.js';
 
-const breedSelect = document.querySelector('.breed-select');
-const loader = document.querySelector('.loader');
-const error = document.querySelector('.error');
-const catInfo = document.querySelector('.cat-info');
+const searchForm = document.getElementById('search-form');
+const loadMoreBtn = document.querySelector('.load-more');
 
-const handleLoader = () => {
-  loader.style.display = 'block';
-  error.style.display = 'none';
-  breedSelect.disabled = true;
+const api = new pixabayAPI();
 
-  fetchBreeds()
-    .then(breeds => {
-      loader.style.display = 'none';
-      breedSelect.disabled = false;
+searchForm.addEventListener('submit', handleFormSubmit);
+loadMoreBtn.addEventListener('click', handleLoadMore);
 
-      breeds.forEach(breed => {
-        const option = document.createElement('option');
-        option.value = breed.id;
-        option.textContent = breed.name;
-        breedSelect.appendChild(option);
-      });
+function handleFormSubmit(event) {
+  event.preventDefault();
+
+  const formData = new FormData(event.currentTarget);
+  const searchQuery = formData.get('searchQuery');
+
+  if (searchQuery.trim() === '') {
+    return;
+  }
+
+  clearGallery();
+  api.resetPage();
+  api.setQuery(searchQuery);
+  fetchPhotos();
+}
+
+function handleLoadMore() {
+  fetchPhotos();
+}
+
+function fetchPhotos() {
+  api.fetchPhotos()
+    .then(({ hits, totalHits }) => {
+      if (hits.length === 0) {
+        showErrorNotification();
+        return;
+      }
+
+      createPhotoCards(hits);
+
+      if (api.page * api.perPage < totalHits) {
+        showLoadMoreBtn();
+      } else {
+        hideLoadMoreBtn();
+        showEndMessage();
+      }
+
+      api.incrementPage();
     })
-    .catch(() => {
-      loader.style.display = 'none';
-      error.style.display = 'block';
+    .catch(error => {
+      console.log('Error:', error);
     });
 }
 
-document.addEventListener('DOMContentLoaded', handleLoader);
-
-const handleChange =  () => {
-  const breedId = breedSelect.value;
-
-  loader.style.display = 'block';
-  error.style.display = 'none';
-  catInfo.innerHTML = '';
-
-  fetchCatByBreed(breedId)
-    .then(cat => {
-      loader.style.display = 'none';
-
-      const image = document.createElement('img');
-      image.src = cat.url;
-      image.alt = cat.breed.name;
-
-      const breedName = document.createElement('p');
-      breedName.textContent = `Breed: ${cat.breed.name}`;
-
-      const description = document.createElement('p');
-      description.textContent = `Description: ${cat.breed.description}`;
-
-      const temperament = document.createElement('p');
-      temperament.textContent = `Temperament: ${cat.breed.temperament}`;
-
-      catInfo.appendChild(image);
-      catInfo.appendChild(breedName);
-      catInfo.appendChild(description);
-      catInfo.appendChild(temperament);
-    })
-    .catch(() => {
-      loader.style.display = 'none';
-      error.style.display = 'block';
-    });
+function showErrorNotification() {Notiflix.Notify.warning('Sorry, there are no images matching your search query. Please try again.');
 }
 
-breedSelect.addEventListener('change', handleChange);
+function showLoadMoreBtn() {
+  loadMoreBtn.style.display = 'block';
+}
+
+function hideLoadMoreBtn() {
+  loadMoreBtn.style.display = 'none';
+}
+
+function showEndMessage() {
+  Notiflix.Notify.info("We're sorry, but you've reached the end of search results.");
+}
